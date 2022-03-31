@@ -67,13 +67,16 @@ public class Song {
      * @return String array with info to be displayed.
      */
     public String[] getDisplayInfo() {
-        String[] copy = new String[6];
+        String[] copy = new String[9];
         copy[0] = this.getTitle();
         copy[1] = this.getAlbum();
         copy[2] = this.getArtist();
         copy[3] = this.getYear();
         copy[4] = this.getStrLength();
         copy[5] = this.getFilePath();
+        copy[6] = String.valueOf(Math.round(this.getMsLength()));
+        copy[7] = String.valueOf(getNumFrames());
+        copy[8] = String.valueOf(Math.round(getMsPerFrame()));
         return copy;
     }
 
@@ -105,13 +108,9 @@ public class Song {
         return filePath;
     }
 
-    public int getFileSize() {
-        return fileSize;
-    }
+    public int getFileSize() { return fileSize; }
 
-    public int getNumFrames() {
-        return numFrames;
-    }
+    public int getNumFrames() { return numFrames; }
 
     public float getMsPerFrame() {
         return msPerFrame;
