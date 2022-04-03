@@ -9,6 +9,9 @@ import support.Song;
 import javax.swing.*;
 import java.awt.event.*;
 import java.io.*;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class Player {
 
@@ -37,6 +40,8 @@ public class Player {
     CurrentSong songPlaying;
     String[] currentPlayerSong;
     boolean isPlaying;
+    //Lock lock = new ReentrantLock();
+
 
     public Player() {
         this.qtde = 0;
@@ -67,13 +72,13 @@ public class Player {
        };
        ActionListener shuffleEvent = e -> shuffle();
        ActionListener previousEvent = e -> previous();
-       ActionListener playPauseEvent = e -> {
+       ActionListener playPauseEvent = e -> new Thread(() -> {
            try {
                playPause();
            } catch (BitstreamException ex) {
                ex.printStackTrace();
            }
-       };
+       }).start();
        ActionListener stopEvent = e -> stop();
        ActionListener nextEvent = e -> next();
        ActionListener repeatEvent = e -> repeat();
@@ -121,27 +126,31 @@ public class Player {
     }
 
     private void playNow(String filePath) throws JavaLayerException, FileNotFoundException {
-        int index = search(filePath);
-        isPlaying = true;
-        window.updatePlayingSongInfo(queueArray[index][0], queueArray[index][1], queueArray[index][2]);
-        window.setEnabledScrubber(isPlaying);
-        window.updatePlayPauseButtonIcon(!isPlaying);
-        window.setEnabledPlayPauseButton(isPlaying);
-        //System.out.println(queueArray[index][6]);
-        window.setTime(0, Integer.parseInt(queueArray[index][6]));
+        if (filePath.equals("null")){
+            JOptionPane.showMessageDialog(null, "Selecione uma opção válida");
+        }else {
+            int index = search(filePath);
+            isPlaying = true;
+            window.updatePlayingSongInfo(queueArray[index][0], queueArray[index][1], queueArray[index][2]);
+            window.setEnabledScrubber(isPlaying);
+            window.updatePlayPauseButtonIcon(!isPlaying);
+            window.setEnabledPlayPauseButton(isPlaying);
+            //System.out.println(queueArray[index][6]);
+            window.setTime(0, Integer.parseInt(queueArray[index][6]));
 
-        File file = new File(filePath);
-        bitstream = new Bitstream(new BufferedInputStream(new FileInputStream(file)));
-        device = FactoryRegistry.systemRegistry().createAudioDevice();
-        device.open(decoder = new Decoder());
+            File file = new File(filePath);
+            bitstream = new Bitstream(new BufferedInputStream(new FileInputStream(file)));
+            device = FactoryRegistry.systemRegistry().createAudioDevice();
+            device.open(decoder = new Decoder());
 
-        if(songPlaying != null){ //evita que as musicas se sobreponham
-            songPlaying.setExit(false);
+            if (songPlaying != null) { //evita que as musicas se sobreponham
+                songPlaying.setExit(false);
+            }
+            currentPlayerSong = queueArray[index];
+
+            songPlaying = new CurrentSong(device, bitstream, decoder, window, currentPlayerSong);
+            songPlaying.start();
         }
-        currentPlayerSong = queueArray[index];
-
-        songPlaying = new CurrentSong(device, bitstream, decoder, window, currentPlayerSong);
-        songPlaying.start();
     }
 
     private void repeat() {
@@ -149,16 +158,20 @@ public class Player {
     
 
     private void playPause() throws BitstreamException {
-        if(isPlaying == true){
-            isPlaying = false;
-            window.updatePlayPauseButtonIcon(!isPlaying);
-            songPlaying.setIsPaused(true);
-        }else{
-            isPlaying = true;
-            window.updatePlayPauseButtonIcon(!isPlaying);
-            songPlaying.setIsPaused(false);
-        }
-
+        Lock lockPlayPause = songPlaying.getLockPlayPause();
+            if (isPlaying == true) {
+                isPlaying = false;
+                window.updatePlayPauseButtonIcon(!isPlaying);
+                songPlaying.setIsPaused(true);
+            } else {
+                lockPlayPause.lock();
+                try {
+                    isPlaying = true;
+                    window.updatePlayPauseButtonIcon(!isPlaying);
+                    songPlaying.setIsPaused(false);
+                    songPlaying.getPlayndpause().signalAll();
+                }finally { lockPlayPause.unlock(); }
+            }
     }
 
     private void shuffle() {
@@ -168,14 +181,11 @@ public class Player {
 
     //<editor-fold desc="Queue Utilities">
     public void addToQueue(Song song) {
-        String[] songAdded = new String[9];
         if(search(song.getFilePath()) != -1) {
             JOptionPane.showMessageDialog(null, "A música já foi adicionada à playlist");
-            //throw new RuntimeException("A música já existe");
         } else {
             if (qtde < queueArray.length) {
-                songAdded = song.getDisplayInfo();
-                queueArray[qtde] = songAdded;
+                queueArray[qtde] = song.getDisplayInfo();
                 this.qtde++;
             } else {
                 String[][] newQueueArray = new String[queueArray.length * 2][1];
@@ -183,7 +193,8 @@ public class Player {
                     newQueueArray[i] = queueArray[i];
                 }
                 this.queueArray = newQueueArray;
-                addToQueue(song);
+                queueArray[qtde] = song.getDisplayInfo();
+                this.qtde++;
             }
             window.updateQueueList(queueArray);
         }
@@ -192,7 +203,6 @@ public class Player {
     public void removeFromQueue(String filePath) {
         if (filePath.equals("null")){
             JOptionPane.showMessageDialog(null, "Selecione uma opção válida");
-            //throw new IllegalArgumentException("Selecione uma opção válida");
         } else{
             int index = search(filePath);
             if(index != -1) {
@@ -236,6 +246,10 @@ public class Player {
     //</editor-fold>
 
     //<editor-fold desc="Getters and Setters">
+
+
+
+
 
     //</editor-fold>
 }

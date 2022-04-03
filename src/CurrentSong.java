@@ -2,20 +2,24 @@ import javazoom.jl.decoder.*;
 import javazoom.jl.player.AudioDevice;
 import support.PlayerWindow;
 
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 
 public class CurrentSong extends Thread{
-    AudioDevice device;
-    Bitstream bitstream;
-    Decoder decoder;
-    boolean exit = true, isPaused;
-    Lock lock;
-    int position;
-    PlayerWindow window;
-    String[] currentSong;
-    int frame;
+    private AudioDevice device;
+    private Bitstream bitstream;
+    private Decoder decoder;
+    private boolean exit = true, isPaused;
+    private Lock lock;
+    private Lock lockPlayPause = new ReentrantLock();
+    private final Condition playndpause = lockPlayPause.newCondition();
+
+
+    private int currentFrame;
+    private PlayerWindow window;
+    private String[] currentSong;
 
     public CurrentSong(AudioDevice device, Bitstream bitstream, Decoder decoder, PlayerWindow window, String[] currentSong) {
         this.device =  device;
@@ -24,7 +28,7 @@ public class CurrentSong extends Thread{
         this.lock = new ReentrantLock();
         this.window = window;
         this.currentSong = currentSong;
-        this.position = 0; this.frame = 0;
+        this.currentFrame = 0;
         this.exit = true; this.isPaused = false;
     }
 
@@ -40,11 +44,6 @@ public class CurrentSong extends Thread{
         }
         return true;
     }
-    public void test(boolean isPlaying){
-        if (isPlaying){
-
-        }
-    }
     /**
      * Skips bitstream to the target frame if the new frame is higher than the current one.
      *
@@ -53,8 +52,8 @@ public class CurrentSong extends Thread{
      */
     private void skipToFrame(int newFrame) throws BitstreamException {
         // TODO Is this thread safe?
-        if (newFrame > position) {
-            int framesToSkip = newFrame - position;
+        if (newFrame > currentFrame) {
+            int framesToSkip = newFrame - currentFrame;
             boolean condition = true;
             while (framesToSkip-- > 0 && condition) condition = skipNextFrame();
         }
@@ -67,7 +66,7 @@ public class CurrentSong extends Thread{
         Header h = bitstream.readFrame();
         if (h == null) return false;
         bitstream.closeFrame();
-        position++;
+        currentFrame++;
         return true;
     }
 
@@ -79,29 +78,39 @@ public class CurrentSong extends Thread{
         this.isPaused = isPaused;
     }
 
-    public boolean isPaused() {
-        return isPaused;
+    public Condition getPlayndpause() {
+        return playndpause;
     }
 
+    public Lock getLockPlayPause() {
+        return lockPlayPause;
+    }
 
-    public void run(){
-        lock.lock();
+    public void run() {
         while (exit) {
+            lock.lock();
             try {
-                    if (!(playNextFrame() == true)) break;
-                    frame++;
-                    //System.out.println(frame);
-                    position = device.getPosition();
-                    window.setTime(frame*Integer.parseInt(currentSong[8]), Integer.parseInt(currentSong[6]));
-                    while(isPaused() == true){
-                        sleep(1);
+                if (!(playNextFrame() == true)) break;
+                currentFrame++;
+
+                window.setTime(currentFrame * Integer.parseInt(currentSong[8]), Integer.parseInt(currentSong[6]));
+                lockPlayPause.lock();
+                try {
+                    while (isPaused) {
+                        playndpause.await();
                     }
+                } finally {
+                    lockPlayPause.unlock();
+                }
+
             } catch (JavaLayerException e) {
                 e.printStackTrace();
             } catch (InterruptedException e) {
                 e.printStackTrace();
+            } finally {
+                lock.unlock();
             }
+
         }
-    lock.unlock();
     }
 }
