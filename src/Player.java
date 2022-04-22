@@ -71,16 +71,38 @@ public class Player {
            }
        };
        ActionListener shuffleEvent = e -> shuffle();
-       ActionListener previousEvent = e -> previous();
-       ActionListener playPauseEvent = e -> new Thread(() -> {
+       ActionListener previousEvent = e -> {
+           try {
+               previous();
+           } catch (FileNotFoundException ex) {
+               ex.printStackTrace();
+           } catch (JavaLayerException ex) {
+               ex.printStackTrace();
+           }
+       };
+       ActionListener playPauseEvent = e -> {
            try {
                playPause();
            } catch (BitstreamException ex) {
                ex.printStackTrace();
            }
-       }).start();
-       ActionListener stopEvent = e -> stop();
-       ActionListener nextEvent = e -> next();
+       };/*new Thread(() -> {
+           try {
+               playPause();
+           } catch (BitstreamException ex) {
+               ex.printStackTrace();
+           }
+       }).start();*/
+       ActionListener stopEvent = e -> new Thread(() ->stop()).start();
+       ActionListener nextEvent = e -> {
+           try {
+               next();
+           } catch (FileNotFoundException ex) {
+               ex.printStackTrace();
+           } catch (JavaLayerException ex) {
+               ex.printStackTrace();
+           }
+       };
        ActionListener repeatEvent = e -> repeat();
         MouseListener mouseListener = new MouseListener() {
             @Override
@@ -132,10 +154,8 @@ public class Player {
             int index = search(filePath);
             isPlaying = true;
             window.updatePlayingSongInfo(queueArray[index][0], queueArray[index][1], queueArray[index][2]);
-            window.setEnabledScrubber(isPlaying);
+            window.setEnabledScrubberArea(isPlaying);
             window.updatePlayPauseButtonIcon(!isPlaying);
-            window.setEnabledPlayPauseButton(isPlaying);
-            //System.out.println(queueArray[index][6]);
             window.setTime(0, Integer.parseInt(queueArray[index][6]));
 
             File file = new File(filePath);
@@ -144,7 +164,7 @@ public class Player {
             device.open(decoder = new Decoder());
 
             if (songPlaying != null) { //evita que as musicas se sobreponham
-                songPlaying.setExit(false);
+                songPlaying.setExit(true);
             }
             currentPlayerSong = queueArray[index];
 
@@ -236,12 +256,26 @@ public class Player {
     //<editor-fold desc="Controls">
 
     public void stop() {
+        isPlaying = false;
+        songPlaying.setExit(true);
+        try {
+            Thread.sleep(200);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        window.resetMiniPlayer();
     }
 
-    public void next() {
+    public void next() throws FileNotFoundException, JavaLayerException {
+        int indexCurrent = search(currentPlayerSong[5]);
+        System.out.println(currentPlayerSong[5]);
+        playNow(queueArray[indexCurrent+1][5]);
     }
 
-    public void previous() {
+    public void previous() throws FileNotFoundException, JavaLayerException {
+        int indexCurrent = search(currentPlayerSong[5]);
+        System.out.println(currentPlayerSong[5]);
+        playNow(queueArray[indexCurrent-1][5]);
     }
     //</editor-fold>
 

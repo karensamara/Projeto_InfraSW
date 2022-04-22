@@ -11,7 +11,7 @@ public class CurrentSong extends Thread{
     private AudioDevice device;
     private Bitstream bitstream;
     private Decoder decoder;
-    private boolean exit = true, isPaused;
+    private boolean exit, isPaused;
     private Lock lock;
     private Lock lockPlayPause = new ReentrantLock();
     private final Condition playndpause = lockPlayPause.newCondition();
@@ -29,7 +29,7 @@ public class CurrentSong extends Thread{
         this.window = window;
         this.currentSong = currentSong;
         this.currentFrame = 0;
-        this.exit = true; this.isPaused = false;
+        this.exit = false; this.isPaused = false;
     }
 
     private boolean playNextFrame() throws JavaLayerException {
@@ -70,9 +70,7 @@ public class CurrentSong extends Thread{
         return true;
     }
 
-    public void setExit(boolean exit) {
-        this.exit = exit;
-    }
+    public void setExit(boolean exit) { this.exit = exit; }
 
     public void setIsPaused(boolean isPaused) {
         this.isPaused = isPaused;
@@ -87,7 +85,7 @@ public class CurrentSong extends Thread{
     }
 
     public void run() {
-        while (exit) {
+        while (!exit) {
             lock.lock();
             try {
                 if (!(playNextFrame() == true)) break;
