@@ -1,7 +1,9 @@
 import javazoom.jl.decoder.*;
 import javazoom.jl.player.AudioDevice;
+import javazoom.jl.player.FactoryRegistry;
 import support.PlayerWindow;
 
+import java.io.FileNotFoundException;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -11,25 +13,31 @@ public class CurrentSong extends Thread{
     private AudioDevice device;
     private Bitstream bitstream;
     private Decoder decoder;
-    private boolean exit, isPaused;
+    private boolean exit, isPaused, scrubbed;
     private Lock lock;
     private Lock lockPlayPause = new ReentrantLock();
     private final Condition playndpause = lockPlayPause.newCondition();
 
 
+    private int scrubber;
     private int currentFrame;
     private PlayerWindow window;
     private String[] currentSong;
+    String[][] queueArray;
+    Player player;
 
-    public CurrentSong(AudioDevice device, Bitstream bitstream, Decoder decoder, PlayerWindow window, String[] currentSong) {
+    public CurrentSong(AudioDevice device, Bitstream bitstream, Decoder decoder, int scrubberValue, Player player) {
         this.device =  device;
         this.bitstream = bitstream;
         this.decoder = decoder;
         this.lock = new ReentrantLock();
-        this.window = window;
-        this.currentSong = currentSong;
+        this.window = player.getWindow();
+        this.currentSong = player.getCurrentPlayerSong();
+        this.queueArray = player.getQueueArray();
         this.currentFrame = 0;
-        this.exit = false; this.isPaused = false;
+        this.scrubber = scrubberValue;
+        this.exit = false; this.isPaused = false; this.scrubbed = false;
+        this.player = player;
     }
 
     private boolean playNextFrame() throws JavaLayerException {
@@ -80,6 +88,10 @@ public class CurrentSong extends Thread{
         return playndpause;
     }
 
+    public void setScrubbed(boolean scrubbed) {
+        this.scrubbed = scrubbed;
+    }
+
     public Lock getLockPlayPause() {
         return lockPlayPause;
     }
@@ -88,10 +100,23 @@ public class CurrentSong extends Thread{
         while (!exit) {
             lock.lock();
             try {
-                if (!(playNextFrame() == true)) break;
-                currentFrame++;
 
+                System.out.println("cFrame:"+currentFrame);
+                System.out.println("scrubber:"+scrubber);
+                if(scrubber > 0){
+                    sleep(10);
+                    skipToFrame(scrubber/(Integer.parseInt(currentSong[8])));
+                    scrubber = 0;
+                }
                 window.setTime(currentFrame * Integer.parseInt(currentSong[8]), Integer.parseInt(currentSong[6]));
+
+                if (!(playNextFrame() == true)) {
+                    player.next();
+                    break;
+                }
+                currentFrame++;
+                System.out.println("cFrame: "+currentFrame);
+                System.out.println("cTime: "+currentFrame * Integer.parseInt(currentSong[8]));
                 lockPlayPause.lock();
                 try {
                     while (isPaused) {
@@ -104,6 +129,8 @@ public class CurrentSong extends Thread{
             } catch (JavaLayerException e) {
                 e.printStackTrace();
             } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (FileNotFoundException e) {
                 e.printStackTrace();
             } finally {
                 lock.unlock();

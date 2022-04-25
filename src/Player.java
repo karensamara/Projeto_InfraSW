@@ -35,27 +35,31 @@ public class Player {
     private boolean playerEnabled = false;
     private boolean playerPaused = true;
     private int currentFrame = 0;
-    String[][] queueArray;
-    private int qtde;
-    CurrentSong songPlaying;
-    String[] currentPlayerSong;
-    boolean isPlaying;
+    private String[][] queueArray;
+    private int qtde, currentTime;
+    private CurrentSong songPlaying;
+    private String[] currentPlayerSong;
+    private boolean isPlaying;
+    private MouseEvent mouseDrag;
     //Lock lock = new ReentrantLock();
 
 
     public Player() {
+        this.currentTime = 0;
         this.qtde = 0;
         this.queueArray = new String[1][1];
        //Criando instancias do actionlistener e direcionando os actionperformed para os seus respectivos metodos
-       ActionListener playNowEvent = e -> {
+       ActionListener playNowEvent = e -> new Thread(() -> {
            try {
                playNow(window.getSelectedSong());
            } catch (JavaLayerException ex) {
                ex.printStackTrace();
            } catch (FileNotFoundException ex) {
                ex.printStackTrace();
+           } catch (InterruptedException ex) {
+               ex.printStackTrace();
            }
-       };
+       }).start();
        ActionListener removeEvent = e -> new Thread(() -> removeFromQueue(window.getSelectedSong())).start();
        ActionListener addEvent = e -> {
            try {
@@ -77,6 +81,8 @@ public class Player {
            } catch (FileNotFoundException ex) {
                ex.printStackTrace();
            } catch (JavaLayerException ex) {
+               ex.printStackTrace();
+           } catch (InterruptedException ex) {
                ex.printStackTrace();
            }
        };
@@ -101,6 +107,8 @@ public class Player {
                ex.printStackTrace();
            } catch (JavaLayerException ex) {
                ex.printStackTrace();
+           } catch (InterruptedException ex) {
+               ex.printStackTrace();
            }
        };
        ActionListener repeatEvent = e -> repeat();
@@ -117,7 +125,21 @@ public class Player {
 
             @Override
             public void mouseReleased(MouseEvent e) {
-
+                if(mouseDrag != null){
+                    currentTime = window.getScrubberValue();
+                    System.out.println(currentTime);
+                    mouseDrag = null;
+                    songPlaying.setScrubbed(true);
+                    try {
+                        playNow(currentPlayerSong[5]);
+                    } catch (JavaLayerException ex) {
+                        ex.printStackTrace();
+                    } catch (FileNotFoundException ex) {
+                        ex.printStackTrace();
+                    } catch (InterruptedException ex) {
+                        ex.printStackTrace();
+                    }
+                }
             }
 
             @Override
@@ -133,7 +155,9 @@ public class Player {
         MouseMotionListener mouseMotionListener = new MouseMotionListener() {
             @Override
             public void mouseDragged(MouseEvent e) {
-
+                if(mouseDrag == null){
+                    mouseDrag = e;
+                }
             }
 
             @Override
@@ -147,7 +171,7 @@ public class Player {
                                             repeatEvent, mouseListener, mouseMotionListener);
     }
 
-    private void playNow(String filePath) throws JavaLayerException, FileNotFoundException {
+    private void playNow(String filePath) throws JavaLayerException, FileNotFoundException, InterruptedException {
         if (filePath.equals("null")){
             JOptionPane.showMessageDialog(null, "Selecione uma opção válida");
         }else {
@@ -156,7 +180,7 @@ public class Player {
             window.updatePlayingSongInfo(queueArray[index][0], queueArray[index][1], queueArray[index][2]);
             window.setEnabledScrubberArea(isPlaying);
             window.updatePlayPauseButtonIcon(!isPlaying);
-            window.setTime(0, Integer.parseInt(queueArray[index][6]));
+            window.setTime(currentTime, Integer.parseInt(queueArray[index][6]));
 
             File file = new File(filePath);
             bitstream = new Bitstream(new BufferedInputStream(new FileInputStream(file)));
@@ -165,11 +189,15 @@ public class Player {
 
             if (songPlaying != null) { //evita que as musicas se sobreponham
                 songPlaying.setExit(true);
+                Thread.sleep(100);
             }
             currentPlayerSong = queueArray[index];
 
-            songPlaying = new CurrentSong(device, bitstream, decoder, window, currentPlayerSong);
+            songPlaying = new CurrentSong(device, bitstream, decoder, currentTime, this);
             songPlaying.start();
+            currentTime = 0;
+            //if(songPlaying.getExit()) talvez
+
         }
     }
 
@@ -266,13 +294,13 @@ public class Player {
         window.resetMiniPlayer();
     }
 
-    public void next() throws FileNotFoundException, JavaLayerException {
+    public void next() throws FileNotFoundException, JavaLayerException, InterruptedException {
         int indexCurrent = search(currentPlayerSong[5]);
         System.out.println(currentPlayerSong[5]);
         playNow(queueArray[indexCurrent+1][5]);
     }
 
-    public void previous() throws FileNotFoundException, JavaLayerException {
+    public void previous() throws FileNotFoundException, JavaLayerException, InterruptedException {
         int indexCurrent = search(currentPlayerSong[5]);
         System.out.println(currentPlayerSong[5]);
         playNow(queueArray[indexCurrent-1][5]);
@@ -281,9 +309,17 @@ public class Player {
 
     //<editor-fold desc="Getters and Setters">
 
+    public PlayerWindow getWindow() {
+        return window;
+    }
 
+    public String[][] getQueueArray() {
+        return queueArray;
+    }
 
-
+    public String[] getCurrentPlayerSong() {
+        return currentPlayerSong;
+    }
 
     //</editor-fold>
 }
