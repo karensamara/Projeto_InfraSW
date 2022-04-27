@@ -23,10 +23,6 @@ public class Player {
      * The MPEG audio decoder.
      */
     private Decoder decoder;
-    /**
-     * The AudioDevice the audio samples are written to.
-     */
-    private AudioDevice device;
 
     private PlayerWindow window;
 
@@ -49,7 +45,7 @@ public class Player {
         this.qtde = 0;
         this.queueArray = new String[1][1];
        //Criando instancias do actionlistener e direcionando os actionperformed para os seus respectivos metodos
-       ActionListener playNowEvent = e -> new Thread(() -> {
+       ActionListener playNowEvent = e -> {
            try {
                playNow(window.getSelectedSong());
            } catch (JavaLayerException ex) {
@@ -59,9 +55,9 @@ public class Player {
            } catch (InterruptedException ex) {
                ex.printStackTrace();
            }
-       }).start();
+       };
        ActionListener removeEvent = e -> new Thread(() -> removeFromQueue(window.getSelectedSong())).start();
-       ActionListener addEvent = e -> {
+       ActionListener addEvent = e -> new Thread(() -> {
            try {
                addToQueue(window.getNewSong());
            } catch (InvalidDataException ex) {
@@ -73,7 +69,7 @@ public class Player {
            } catch (BitstreamException ex) {
                ex.printStackTrace();
            }
-       };
+       }).start();
        ActionListener shuffleEvent = e -> shuffle();
        ActionListener previousEvent = e -> {
            try {
@@ -92,13 +88,7 @@ public class Player {
            } catch (BitstreamException ex) {
                ex.printStackTrace();
            }
-       };/*new Thread(() -> {
-           try {
-               playPause();
-           } catch (BitstreamException ex) {
-               ex.printStackTrace();
-           }
-       }).start();*/
+       };
        ActionListener stopEvent = e -> new Thread(() ->stop()).start();
        ActionListener nextEvent = e -> {
            try {
@@ -125,11 +115,10 @@ public class Player {
 
             @Override
             public void mouseReleased(MouseEvent e) {
-                if(mouseDrag != null){
+                if(mouseDrag != null && isPlaying == true){
                     currentTime = window.getScrubberValue();
-                    System.out.println(currentTime);
+                    //System.out.println(currentTime);
                     mouseDrag = null;
-                    songPlaying.setScrubbed(true);
                     try {
                         playNow(currentPlayerSong[5]);
                     } catch (JavaLayerException ex) {
@@ -139,6 +128,23 @@ public class Player {
                     } catch (InterruptedException ex) {
                         ex.printStackTrace();
                     }
+                }else if(mouseDrag != null && isPlaying == false) {
+                    currentTime = window.getScrubberValue();
+                    //System.out.println(currentTime);
+                    mouseDrag = null;
+                    try {
+                        playNow(currentPlayerSong[5]);
+                        playerPaused = true;
+                        playPause();
+
+                    } catch (JavaLayerException ex) {
+                        ex.printStackTrace();
+                    } catch (FileNotFoundException ex) {
+                        ex.printStackTrace();
+                    } catch (InterruptedException ex) {
+                        ex.printStackTrace();
+                    }
+
                 }
             }
 
@@ -169,60 +175,6 @@ public class Player {
         this.window = new PlayerWindow("SongTerrace", queueArray, playNowEvent, removeEvent, addEvent,
                                         shuffleEvent, previousEvent, playPauseEvent, stopEvent, nextEvent,
                                             repeatEvent, mouseListener, mouseMotionListener);
-    }
-
-    private void playNow(String filePath) throws JavaLayerException, FileNotFoundException, InterruptedException {
-        if (filePath.equals("null")){
-            JOptionPane.showMessageDialog(null, "Selecione uma opção válida");
-        }else {
-            int index = search(filePath);
-            isPlaying = true;
-            window.updatePlayingSongInfo(queueArray[index][0], queueArray[index][1], queueArray[index][2]);
-            window.setEnabledScrubberArea(isPlaying);
-            window.updatePlayPauseButtonIcon(!isPlaying);
-            window.setTime(currentTime, Integer.parseInt(queueArray[index][6]));
-
-            File file = new File(filePath);
-            bitstream = new Bitstream(new BufferedInputStream(new FileInputStream(file)));
-            device = FactoryRegistry.systemRegistry().createAudioDevice();
-            device.open(decoder = new Decoder());
-
-            if (songPlaying != null) { //evita que as musicas se sobreponham
-                songPlaying.setExit(true);
-                Thread.sleep(100);
-            }
-            currentPlayerSong = queueArray[index];
-
-            songPlaying = new CurrentSong(device, bitstream, decoder, currentTime, this);
-            songPlaying.start();
-            currentTime = 0;
-            //if(songPlaying.getExit()) talvez
-
-        }
-    }
-
-    private void repeat() {
-    }
-    
-
-    private void playPause() throws BitstreamException {
-        Lock lockPlayPause = songPlaying.getLockPlayPause();
-            if (isPlaying == true) {
-                isPlaying = false;
-                window.updatePlayPauseButtonIcon(!isPlaying);
-                songPlaying.setIsPaused(true);
-            } else {
-                lockPlayPause.lock();
-                try {
-                    isPlaying = true;
-                    window.updatePlayPauseButtonIcon(!isPlaying);
-                    songPlaying.setIsPaused(false);
-                    songPlaying.getPlayndpause().signalAll();
-                }finally { lockPlayPause.unlock(); }
-            }
-    }
-
-    private void shuffle() {
     }
 
     //</editor-fold>
@@ -275,13 +227,65 @@ public class Player {
         return index;
     }
 
-    public String[][] getQueueAsArray() {
-        return queueArray;
-    }
-
     //</editor-fold>
 
     //<editor-fold desc="Controls">
+    private void playNow(String filePath) throws JavaLayerException, FileNotFoundException, InterruptedException {
+        if (filePath.equals("null")){
+            JOptionPane.showMessageDialog(null, "Selecione uma opção válida");
+        }else {
+            int index = search(filePath);
+            isPlaying = true;
+            window.updatePlayingSongInfo(queueArray[index][0], queueArray[index][1], queueArray[index][2]);
+            window.setEnabledScrubberArea(isPlaying);
+            window.updatePlayPauseButtonIcon(!isPlaying);
+            window.setTime(currentTime, Integer.parseInt(queueArray[index][6]));
+
+            File file = new File(filePath);
+            bitstream = new Bitstream(new BufferedInputStream(new FileInputStream(file)));
+            /**
+             * The AudioDevice the audio samples are written to.
+             */
+            AudioDevice device = FactoryRegistry.systemRegistry().createAudioDevice();
+            device.open(decoder = new Decoder());
+
+            if (songPlaying != null) { //evita que as musicas se sobreponham
+                songPlaying.setExit(true);
+                Thread.sleep(100);
+            }
+            currentPlayerSong = queueArray[index];
+
+            songPlaying = new CurrentSong(device, bitstream, decoder, currentTime, this);
+            songPlaying.start();
+            currentTime = 0;
+            //if(songPlaying.getExit())
+
+        }
+    }
+
+    private void repeat() {
+    }
+
+
+    private void playPause() throws BitstreamException {
+        Lock lockPlayPause = songPlaying.getLockPlayPause();
+        if (isPlaying == true) {
+            isPlaying = false;
+            window.updatePlayPauseButtonIcon(!isPlaying);
+            songPlaying.setIsPaused(true);
+        } else {
+            lockPlayPause.lock();
+            try {
+                isPlaying = true;
+                window.updatePlayPauseButtonIcon(!isPlaying);
+                songPlaying.setIsPaused(false);
+                songPlaying.getPlayndpause().signalAll();
+            }finally { lockPlayPause.unlock(); }
+        }
+    }
+
+    private void shuffle() {
+    }
 
     public void stop() {
         isPlaying = false;

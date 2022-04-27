@@ -36,7 +36,7 @@ public class CurrentSong extends Thread{
         this.queueArray = player.getQueueArray();
         this.currentFrame = 0;
         this.scrubber = scrubberValue;
-        this.exit = false; this.isPaused = false; this.scrubbed = false;
+        this.exit = false; this.isPaused = false; //this.scrubbed = false;
         this.player = player;
     }
 
@@ -74,7 +74,7 @@ public class CurrentSong extends Thread{
         Header h = bitstream.readFrame();
         if (h == null) return false;
         bitstream.closeFrame();
-        currentFrame++;
+        this.currentFrame++;
         return true;
     }
 
@@ -88,10 +88,6 @@ public class CurrentSong extends Thread{
         return playndpause;
     }
 
-    public void setScrubbed(boolean scrubbed) {
-        this.scrubbed = scrubbed;
-    }
-
     public Lock getLockPlayPause() {
         return lockPlayPause;
     }
@@ -101,13 +97,12 @@ public class CurrentSong extends Thread{
             lock.lock();
             try {
 
-                System.out.println("cFrame:"+currentFrame);
-                System.out.println("scrubber:"+scrubber);
                 if(scrubber > 0){
                     sleep(10);
                     skipToFrame(scrubber/(Integer.parseInt(currentSong[8])));
                     scrubber = 0;
                 }
+
                 window.setTime(currentFrame * Integer.parseInt(currentSong[8]), Integer.parseInt(currentSong[6]));
 
                 if (!(playNextFrame() == true)) {
@@ -115,8 +110,7 @@ public class CurrentSong extends Thread{
                     break;
                 }
                 currentFrame++;
-                System.out.println("cFrame: "+currentFrame);
-                System.out.println("cTime: "+currentFrame * Integer.parseInt(currentSong[8]));
+                //check for pauses
                 lockPlayPause.lock();
                 try {
                     while (isPaused) {
