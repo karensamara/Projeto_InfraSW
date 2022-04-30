@@ -9,6 +9,7 @@ import support.Song;
 import javax.swing.*;
 import java.awt.event.*;
 import java.io.*;
+import java.util.Random;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -28,11 +29,8 @@ public class Player {
 
     private boolean repeat = false;
     private boolean shuffle = false;
-    private boolean playerEnabled = false;
-    private boolean playerPaused = true;
-    private int currentFrame = 0;
-    private String[][] queueArray;
-    private int qtde, currentTime;
+    private String[][] queueArray, newArray;
+    private int qtde, currentTime, indexCurrent;
     private CurrentSong songPlaying;
     private String[] currentPlayerSong;
     private boolean isPlaying;
@@ -82,13 +80,13 @@ public class Player {
                ex.printStackTrace();
            }
        };
-       ActionListener playPauseEvent = e -> {
+       ActionListener playPauseEvent = e -> new Thread(() -> {
            try {
                playPause();
            } catch (BitstreamException ex) {
                ex.printStackTrace();
            }
-       };
+       }).start();
        ActionListener stopEvent = e -> new Thread(() ->stop()).start();
        ActionListener nextEvent = e -> {
            try {
@@ -134,7 +132,6 @@ public class Player {
                     mouseDrag = null;
                     try {
                         playNow(currentPlayerSong[5]);
-                        playerPaused = true;
                         playPause();
 
                     } catch (JavaLayerException ex) {
@@ -212,6 +209,7 @@ public class Player {
                 queueArray[qtde-1] = null;
                 this.qtde--;
             }
+            indexCurrent = search(currentPlayerSong[5]);
             window.updateQueueList(queueArray);
         }
     }
@@ -234,18 +232,15 @@ public class Player {
         if (filePath.equals("null")){
             JOptionPane.showMessageDialog(null, "Selecione uma opção válida");
         }else {
-            int index = search(filePath);
+            indexCurrent = search(filePath);
             isPlaying = true;
-            window.updatePlayingSongInfo(queueArray[index][0], queueArray[index][1], queueArray[index][2]);
+            window.updatePlayingSongInfo(queueArray[indexCurrent][0], queueArray[indexCurrent][1], queueArray[indexCurrent][2]);
             window.setEnabledScrubberArea(isPlaying);
             window.updatePlayPauseButtonIcon(!isPlaying);
-            window.setTime(currentTime, Integer.parseInt(queueArray[index][6]));
+            window.setTime(currentTime, Integer.parseInt(queueArray[indexCurrent][6]));
 
             File file = new File(filePath);
             bitstream = new Bitstream(new BufferedInputStream(new FileInputStream(file)));
-            /**
-             * The AudioDevice the audio samples are written to.
-             */
             AudioDevice device = FactoryRegistry.systemRegistry().createAudioDevice();
             device.open(decoder = new Decoder());
 
@@ -253,7 +248,7 @@ public class Player {
                 songPlaying.setExit(true);
                 Thread.sleep(100);
             }
-            currentPlayerSong = queueArray[index];
+            currentPlayerSong = queueArray[indexCurrent];
 
             songPlaying = new CurrentSong(device, bitstream, decoder, currentTime, this);
             songPlaying.start();
@@ -264,6 +259,7 @@ public class Player {
     }
 
     private void repeat() {
+        repeat = !repeat;
     }
 
 
@@ -285,6 +281,29 @@ public class Player {
     }
 
     private void shuffle() {
+        shuffle = !shuffle;
+        if(shuffle){
+            newArray = new String[qtde][];
+            System.arraycopy(queueArray, 0, newArray, 0, qtde);
+            String[] first = queueArray[0];
+            queueArray[0] = queueArray[indexCurrent];
+            queueArray[indexCurrent] = first;
+            indexCurrent = 0;
+
+            Random rd = new Random();
+            for(int i = qtde -1; i > 1; i--){
+                int j = rd.nextInt(1, i+1);
+
+                String[] temp = queueArray[i];
+                queueArray[i] = queueArray[j];
+                queueArray[j] = temp;
+            }
+            window.updateQueueList(queueArray);
+        }else{
+            System.arraycopy(newArray, 0, queueArray, 0, qtde);
+            indexCurrent = search(currentPlayerSong[5]);
+            window.updateQueueList(queueArray);
+        }
     }
 
     public void stop() {
@@ -299,14 +318,20 @@ public class Player {
     }
 
     public void next() throws FileNotFoundException, JavaLayerException, InterruptedException {
-        int indexCurrent = search(currentPlayerSong[5]);
-        System.out.println(currentPlayerSong[5]);
-        playNow(queueArray[indexCurrent+1][5]);
+
+        try {
+            playNow(queueArray[indexCurrent + 1][5]);
+        }catch (ArrayIndexOutOfBoundsException e){
+            if (repeat) { playNow(queueArray[0][5]); }
+        }catch (NullPointerException e){
+            if (repeat) { playNow(queueArray[0][5]); }
+        }
+
     }
 
     public void previous() throws FileNotFoundException, JavaLayerException, InterruptedException {
-        int indexCurrent = search(currentPlayerSong[5]);
-        System.out.println(currentPlayerSong[5]);
+        //int indexCurrent = search(currentPlayerSong[5]);
+        //System.out.println(currentPlayerSong[5]);
         playNow(queueArray[indexCurrent-1][5]);
     }
     //</editor-fold>
